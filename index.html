@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. Core Interface</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #00f2ff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        /* Top HUD Status */
+        .hud-header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            opacity: 0.7;
+            border-bottom: 1px solid rgba(0, 242, 255, 0.2);
+            padding-bottom: 10px;
+        }
+
+        /* Arc Reactor Core */
+        .core-container {
+            position: relative;
+            width: 250px;
+            height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .outer-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px dashed #00f2ff;
+            border-radius: 50%;
+            animation: rotateClockwise 15s linear infinite;
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+        }
+
+        .inner-ring {
+            position: absolute;
+            width: 75%;
+            height: 75%;
+            border: 4px solid #00f2ff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            border-bottom-color: transparent;
+            animation: rotateCounterClockwise 4s linear infinite;
+        }
+
+        .center-node {
+            position: absolute;
+            width: 40%;
+            height: 40%;
+            background: radial-gradient(circle, rgba(0,242,255,1) 0%, rgba(0,26,51,1) 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 30px #00f2ff;
+            transition: transform 0.2s;
+        }
+
+        .core-container:active .center-node {
+            transform: scale(0.9);
+        }
+
+        /* Pulsing state when "listening" */
+        .listening .inner-ring {
+            animation: pulse 1s ease-in-out infinite alternate;
+            border-color: #ff0055;
+        }
+        .listening .outer-ring { border-color: #ff0055; box-shadow: 0 0 20px rgba(255, 0, 85, 0.2); }
+        .listening .center-node { background: radial-gradient(circle, #ff0055 0%, #330011 100%); box-shadow: 0 0 30px #ff0055; }
+
+        /* Terminal Display */
+        .terminal {
+            width: 100%;
+            max-width: 500px;
+            height: 150px;
+            background: rgba(0, 242, 255, 0.03);
+            border: 1px solid rgba(0, 242, 255, 0.2);
+            border-radius: 5px;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            box-shadow: inset 0 0 15px rgba(0, 242, 255, 0.05);
+        }
+
+        .system-text { color: #00f2ff; }
+        .jarvis-text { color: #fff; font-weight: bold; }
+
+        /* Animations */
+        @keyframes rotateClockwise { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes rotateCounterClockwise { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+        @keyframes pulse { from { transform: scale(1); opacity: 0.8; } to { transform: scale(1.1); opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div class="hud-header">
+        <div>SYS_LOC: MAINFRAME_BR_01</div>
+        <div id="battery-status">CORE_PWR: 100%</div>
+    </div>
+
+    <!-- Tap the reactor to activate the voice matrix -->
+    <div class="core-container" id="arc-reactor" onclick="toggleListening()">
+        <div class="outer-ring"></div>
+        <div class="inner-ring"></div>
+        <div class="center-node"></div>
+    </div>
+
+    <div class="terminal" id="terminal-log">
+        <span class="system-text">SYSTEM: Mark LXXXV online. Audio matrices calibrated. Tap the Arc Core to initiate vocal command pathways, sir.</span>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal-log');
+        const reactor = document.getElementById('arc-reactor');
+        
+        // Web Speech API Configuration
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        let isListening = false;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                logToTerminal("SYSTEM", "Microphone arrays active. Listening...");
+            };
+
+            recognition.onerror = (event) => {
+                logToTerminal("ERROR", "Acoustic link failure: " + event.error);
+                stopListeningState();
+            };
+
+            recognition.onend = () => {
+                stopListeningState();
+            };
+
+            recognition.onresult = (event) => {
+                const speechToText = event.results[0][0].transcript;
+                logToTerminal("USER", `"${speechToText}"`);
+                processCommand(speechToText.toLowerCase());
+            };
+        } else {
+            logToTerminal("ERROR", "Speech recognition protocols are unsupported by this browser architecture.");
+        }
+
+        function toggleListening() {
+            if (!recognition) return;
+            if (isListening) {
+                recognition.stop();
+            } else {
+                reactor.classList.add('listening');
+                isListening = true;
+                recognition.start();
+            }
+        }
+
+        function stopListeningState() {
+            reactor.classList.remove('listening');
+            isListening = false;
+        }
+
+        function logToTerminal(sender, message) {
+            const entry = document.createElement('div');
+            entry.innerHTML = `<span class="system-text">[${sender}]:</span> <span>${message}</span>`;
+            terminal.appendChild(entry);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function processCommand(cmd) {
+            if (cmd.includes("hey jarvis") || cmd.includes("jarvis")) {
+                if (cmd.includes("protocol alpha")) {
+                    respond("Protocol Alpha is fully engaged, sir. Mainframe structures are secure.");
+                } else if (cmd.includes("status")) {
+                    respond("All systems are completely nominal, sir. Power grid is stable at 100%.");
+                } else {
+                    respond("At your service, sir. Processing your parameters.");
+                }
+            } else {
+                logToTerminal("SYSTEM", "Command discarded. Wake-word sequence omitted.");
+            }
+        }
+
+        function respond(replyText) {
+            logToTerminal("JARVIS", replyText);
+            
+            // Text to speech protocol
+            const utterance = new SpeechSynthesisUtterance(replyText);
+            const voices = window.speechSynthesis.getVoices();
+            const ukVoice = voices.find(voice => voice.lang === 'en-GB' && voice.gender === 'male') || voices.find(voice => voice.lang === 'en-GB');
+            if (ukVoice) utterance.voice = ukVoice;
+            
+            window.speechSynthesis.speak(utterance);
+        }
+    </script>
+</body>
+  </html>
