@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. Core</title>
+    <style>
+        body {
+            background-color: #030811;
+            color: #00f0ff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        #terminal {
+            width: 85%;
+            height: 140px;
+            background: rgba(5, 15, 30, 0.85);
+            border: 1px solid #00f0ff;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.15);
+            padding: 15px;
+            overflow-y: auto;
+            margin-bottom: 35px;
+            font-size: 13px;
+            border-radius: 6px;
+            text-shadow: 0 0 5px rgba(0, 240, 255, 0.5);
+        }
+        .reactor-container {
+            position: relative;
+            width: 240px;
+            height: 240px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* Outer segmented ring */
+        .outer-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 4px dashed #00f0ff;
+            border-radius: 50%;
+            animation: spinCW 12s linear infinite;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.3);
+            transition: all 0.4s ease;
+        }
+        /* Intermediary fast ring */
+        .inner-ring {
+            position: absolute;
+            width: 75%;
+            height: 75%;
+            border: 3px dotted #00a8ff;
+            border-radius: 50%;
+            animation: spinCCW 4s linear infinite;
+            transition: all 0.4s ease;
+        }
+        /* The Central Power Core */
+        .core {
+            position: absolute;
+            width: 45%;
+            height: 45%;
+            background: radial-gradient(circle, #ffffff 10%, #00f0ff 60%, #0055ff 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 35px #00f0ff, inset 0 0 15px #ffffff;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        /* ---- ACTIVE TALKING MODES (PUMPING & BREATHING EFFECTS) ---- */
+        
+        /* Pulse pumping effect while Jarvis is answering */
+        .jarvis-talking .outer-ring {
+            border-color: #00ffaa;
+            box-shadow: 0 0 40px rgba(0, 255, 170, 0.6);
+            animation: spinCW 3s linear infinite, jarvisPump 0.8s ease-in-out infinite alternate;
+        }
+        .jarvis-talking .inner-ring {
+            border-color: #ffffff;
+            animation: spinCCW 1s linear infinite, jarvisPump 0.8s ease-in-out infinite alternate-reverse;
+        }
+        .jarvis-talking .core {
+            background: radial-gradient(circle, #ffffff 20%, #00ffaa 70%, #00aa66 100%);
+            box-shadow: 0 0 60px #00ffaa, inset 0 0 20px #ffffff;
+            animation: coreBlast 0.4s ease-in-out infinite alternate;
+        }
+
+        /* Red visual shift when user triggers manual listening override */
+        .listening-active .outer-ring {
+            border-color: #ff2a6d;
+            box-shadow: 0 0 45px rgba(255, 42, 109, 0.5);
+        }
+        .listening-active .core {
+            background: radial-gradient(circle, #ffffff 10%, #ff2a6d 70%, #990033 100%);
+            box-shadow: 0 0 50px #ff2a6d;
+        }
+
+        /* ---- KEYFRAME ANIMATIONS ---- */
+        @keyframes spinCW {
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes spinCCW {
+            100% { transform: rotate(-360deg); }
+        }
+        /* Heavy mechanical container pump */
+        @keyframes jarvisPump {
+            0% { transform: scale(0.92); filter: brightness(0.9); }
+            100% { transform: scale(1.08); filter: brightness(1.2); }
+        }
+        /* High energy core contraction */
+        @keyframes coreBlast {
+            0% { transform: scale(0.85); box-shadow: 0 0 30px #00ffaa; }
+            100% { transform: scale(1.15); box-shadow: 0 0 70px #ffffff, 0 0 40px #00ffaa; }
+        }
+
+        #status {
+            margin-top: 30px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-size: 14px;
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="terminal">⚡ J.A.R.V.I.S. MK-II POWER GRID ONLINE...<br>[SYSTEM]: Diagnostics nominal. Tap the Reactor Core to initialize ambient vocal matrix...</div>
+
+    <div class="reactor-container" id="reactorContainer" onclick="startContinuousListening()">
+        <div class="outer-ring"></div>
+        <div class="inner-ring"></div>
+        <div class="core"></div>
+    </div>
+
+    <div id="status" style="color: #00f0ff;">CORE STANDBY</div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const container = document.getElementById('reactorContainer');
+        const statusText = document.getElementById('status');
+        let recognition;
+        let isListeningActive = false;
+
+        function log(message) {
+            terminal.innerHTML += `<br>${message}`;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            const voices = window.speechSynthesis.getVoices();
+            const ukVoice = voices.find(voice => voice.lang === 'en-GB' || voice.lang.includes('GB'));
+            if (ukVoice) utterance.voice = ukVoice;
+            
+            // Link the physical "pumping" animations directly to the vocal feedback tracks
+            utterance.onstart = () => {
+                container.classList.remove('listening-active');
+                container.classList.add('jarvis-talking');
+                statusText.innerText = "TRANSMITTING VOCAL DATA";
+                statusText.style.color = "#00ffaa";
+            };
+
+            utterance.onend = () => {
+                container.classList.remove('jarvis-talking');
+                statusText.innerText = "LISTENING FOR WAKE WORD";
+                statusText.style.color = "#00f0ff";
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function startContinuousListening() {
+            if (isListeningActive) return;
+            
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                log("[ERROR]: Web Speech API missing on this hardware platform.");
+                return;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                isListeningActive = true;
+                if (!container.classList.contains('jarvis-talking')) {
+                    statusText.innerText = "LISTENING FOR WAKE WORD";
+                    statusText.style.color = "#00f0ff";
+                }
+            };
+
+            recognition.onresult = (event) => {
+                const resultText = event.results[0][0].transcript.toLowerCase();
+                log(`[HEARD]: "${resultText}"`);
+
+                if (resultText.includes('jarvis') || resultText.includes('hey jarvis')) {
+                    triggerJarvisResponse(resultText);
+                }
+            };
+
+            recognition.onerror = (event) => {
+                if (event.error !== 'no-speech') {
+                    log(`[DIAGNOSTIC]: ${event.error}`);
+                }
+            };
+
+            recognition.onend = () => {
+                if (isListeningActive) {
+                    recognition.start();
+                }
+            };
+
+            recognition.start();
+            log("[SYSTEM]: Neural synchronization complete. Background microphone open. Say 'Hey Jarvis'...");
+        }
+
+        function triggerJarvisResponse(phrase) {
+            // Visual pulse confirmation that wake word was caught
+            container.classList.add('listening-active');
+            statusText.innerText = "DECRYPTING COMMAND";
+            statusText.style.color = "#ff2a6d";
+
+            let response = "At your service, sir.";
+            
+            if (phrase.includes('status report')) {
+                response = "All systems operational, sir. Power grid is stabilized at one hundred percent, environmental readings in Windhoek are clear, and the local mainframe is fully secure.";
+            } else if (phrase.includes('protocol alpha')) {
+                response = "Protocol Alpha fully acknowledged. Redirection sequences initiated. Sealing local firewall configurations and routing backup power to primary defenses.";
+            } else if (phrase.includes('hello') || phrase.includes('hi')) {
+                response = "Welcome back, Creator. Core automation systems are online and awaiting your command.";
+            }
+
+            log(`[JARVIS]: ${response}`);
+            
+            // Short delay so the user can appreciate the transition into the heavy pumping state
+            setTimeout(() => {
+                speak(response);
+            }, 600);
+        }
+    </script>
+</body>
+</html>
